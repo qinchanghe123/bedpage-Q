@@ -1,0 +1,272 @@
+<!doctype html> 
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>顶流广告技术有限公司 · Bedpage 定点查询</title>
+
+<!-- Mapbox（未画地图，仅保留以防后续扩展） -->
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+
+<!-- ===== 新 UI 样式（仅改外观，不改脚本逻辑与元素 id） ===== -->
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,'Noto Sans',sans-serif;
+    min-height:100vh;
+    color:#111827;
+    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+    padding:20px;
+  }
+
+  .main-wrapper{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:20px}
+  .container{
+    background:rgba(255,255,255,.95);
+    border-radius:16px;
+    box-shadow:0 12px 32px rgba(0,0,0,.15);
+    overflow:hidden;
+  }
+  .header{
+    padding:26px 26px 12px;
+    background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%);
+    border-bottom:1px solid #eef2f7;
+    text-align:center;
+  }
+  .header h1{font-size:22px;font-weight:800;color:#1f2937;letter-spacing:.4px}
+  .subtitle{margin-top:8px;color:#64748b;font-size:14px}
+
+  .content{padding:22px 24px 26px}
+
+  /* 输入区 */
+  .row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+  #addressInput{
+    width:100%;padding:14px 14px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;outline:none;
+    font-size:14px;color:#111827;transition:all .2s ease;
+  }
+  #addressInput:focus{border-color:#60a5fa;box-shadow:0 0 0 4px rgba(59,130,246,.15)}
+  #btnSearch{
+    padding:12px 16px;border-radius:12px;border:1px solid rgba(59,130,246,.55);
+    color:#fff;background:linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);
+    font-weight:800;cursor:pointer;
+  }
+  #btnSearch:hover{filter:brightness(1.05)}
+  .feature-note{
+    margin-top:12px;color:#6b7280;font-size:14px;text-align:center;padding:10px;
+    background:rgba(107,114,128,.08);border-radius:8px;border-left:4px solid #3b82f6;
+  }
+
+  /* 状态条/进度条/信息 */
+  .status{display:flex;gap:12px;align-items:center;margin-top:12px;font-size:13px;color:#6b7280}
+  .badge{padding:2px 8px;border-radius:999px;font-weight:700}
+  .badge.ok{background:rgba(52,211,153,.15);color:#059669;border:1px solid rgba(52,211,153,.35)}
+  .progress{margin-top:12px;background:#f3f4f6;height:10px;border-radius:999px;overflow:hidden;display:none}
+  .progress>div{height:100%;width:0%;background:linear-gradient(90deg,#34d399,#10b981);transition:width .25s ease}
+  .error{
+    display:block;color:#dc2626;background:#fee2e2;border:1px solid #fecaca;
+    padding:12px 14px;border-radius:10px;margin-top:12px;white-space:pre-wrap
+  }
+  .info{
+    color:#059669;background:#ecfdf5;border:1px solid #bbf7d0;
+    padding:10px 12px;border-radius:10px;margin-top:12px
+  }
+
+  /* 结果表 */
+  table{width:100%;border-collapse:collapse;margin-top:14px;background:#fff;border-radius:12px;overflow:hidden;
+        box-shadow:0 4px 10px rgba(0,0,0,.06)}
+  thead th{
+    text-align:left;font-size:12px;color:#475569;font-weight:700;letter-spacing:.4px;
+    border-bottom:1px solid #e5e7eb;padding:10px 8px;background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%)
+  }
+  tbody td{padding:12px 8px;border-bottom:1px dashed #e5e7eb;vertical-align:middle;color:#111827}
+  tbody tr:hover{background:#f9fafb}
+  .nav-link{
+    text-decoration:none;padding:8px 10px;border-radius:10px;background:rgba(99,102,241,.12);
+    border:1px solid rgba(99,102,241,.35);color:#4338ca;font-weight:700;white-space:nowrap
+  }
+</style>
+</head>
+<body>
+
+<div class="main-wrapper">
+  <div class="container">
+    <div class="header">
+      <h1>顶流广告技术有限公司</h1>
+      <div class="subtitle">🎯 Bedpage 定点查询（英里/分钟）</div>
+    </div>
+
+    <div class="content">
+      <div class="row">
+        <input id="addressInput" type="text" placeholder="例如：1600 Amphitheatre Pkwy, Mountain View, CA" />
+        <button id="btnSearch">开始计算</button>
+      </div>
+      <div class="feature-note">提示：城市在列表 ⇒ 仅显示该城市的区域；否则改用同州最近支持城市的区域。</div>
+
+      <div class="status">
+        <span id="loading" style="display:none" class="badge ok">处理中…</span>
+        <span id="progressText"></span>
+      </div>
+      <div id="progressContainer" class="progress"><div id="progressBar"></div></div>
+
+      <div id="error" class="error"></div>
+      <div id="locationInfo" class="info" style="display:none"></div>
+      <div id="results"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= 原脚本：保持不变（仅 UI 改动） ======= -->
+<script>
+const MAPBOX_TOKEN = 'sk.eyJ1Ijoic2t0a2luZ2VyIiwiYSI6ImNtaDh1Z3BiNTBoYXEybm9vbHgyaHpwdTMifQ.8mqdIXc72UHcuQMecZeKzg';
+const MAX_CONCURRENT=50, REQUEST_TIMEOUT=60000, MAX_BATCH_SIZE=25;
+const GEOCODE_TYPES_CITY='place,locality', GEOCODE_TYPES_AREA='neighborhood,locality,place';
+
+const btn=document.getElementById('btnSearch'), loadingEl=document.getElementById('loading'), errEl=document.getElementById('error');
+const resultsEl=document.getElementById('results'), infoEl=document.getElementById('locationInfo');
+const progressC=document.getElementById('progressContainer'), progressBar=document.getElementById('progressBar'), progressTxt=document.getElementById('progressText');
+
+/* ==== 工具函数：英里 & 分钟（直接由 API 值换算） ==== */
+const m2mi = m => m/1609.344;
+const fmtDist = m => Number.isFinite(m) ? (m2mi(m) >= 100 ? `${m2mi(m).toFixed(0)} 英里` : `${m2mi(m).toFixed(1)} 英里`) : '—';
+const fmtDur  = s => Number.isFinite(s) ? `${Math.round(s/60)} 分钟` : '—';
+
+const geocodeCache=new Map();
+const withTimeout=(p,t)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error('API 超时')),t))]);
+const chunk=(a,n)=>{const r=[];for(let i=0;i<a.length;i+=n)r.push(a.slice(i,i+n));return r;}
+const norm=s=>(s||'').toLowerCase().replace(/[\s_-]+/g,' ').trim(), title=s=>(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+const findStateKey=(obj,raw)=>{const w=norm(raw), ks=Object.keys(obj||{}); for(const k of ks) if(norm(k)===w) return k; for(const k of ks){const nk=norm(k); if(nk.includes(w)||w.includes(nk)) return k;} const t=title(w); for(const k of ks) if(title(norm(k))===t) return k; return null;}
+const findCityKey=(keys,raw)=>{const w=norm(raw); for(const k of keys) if(norm(k)===w) return k; for(const k of keys){const nk=norm(k); if(nk.includes(w)||w.includes(nk)) return k;} const t=title(w); for(const k of keys) if(title(norm(k))===t) return k; return null;}
+
+/* ==== Geocoding v6 兼容解析 ==== */
+function parseRegionCity(f){
+  const p=f.properties||{}, ctx=p.context; let region='', city='';
+  if(Array.isArray(ctx)){for(const c of ctx){const id=c.id||''; if(id.startsWith('region'))region=c.name||region; if(id.startsWith('place'))city=c.name||city; if(id.startsWith('locality')&&!city)city=c.name||city; if(id.startsWith('district')&&!city)city=c.name||city; if(id.startsWith('neighborhood')&&!city)city=c.name||city;}}
+  else if(ctx&&typeof ctx==='object'){const pick=v=>Array.isArray(v)?v[0]:v; const R=pick(ctx.region),P=pick(ctx.place),L=pick(ctx.locality),D=pick(ctx.district),N=pick(ctx.neighborhood); region=R?.name||region; city=P?.name||L?.name||D?.name||N?.name||city;}
+  if(!region||!city){const s=p.place_formatted||p.full_address||f.place_name||'';const a=s.split(',').map(x=>x.trim()); if(!city&&a.length)city=a[0]; if(!region&&a.length>=2)region=a[a.length-2];}
+  return {regionName:region, cityName:city};
+}
+async function geocodeForward(q,{types,proximity}={}){
+  const key=`${q}|${types||''}|${proximity||''}`; if(geocodeCache.has(key)) return geocodeCache.get(key);
+  const url=new URL('https://api.mapbox.com/search/geocode/v6/forward'); url.searchParams.set('q',q); url.searchParams.set('limit','1');
+  if(types)url.searchParams.set('types',types); if(proximity)url.searchParams.set('proximity',proximity); url.searchParams.set('access_token',MAPBOX_TOKEN);
+  const res=await withTimeout(fetch(url.toString()),REQUEST_TIMEOUT); if(!res.ok) throw new Error('Geocoding 失败');
+  const data=await res.json(); const f=data?.features?.[0]; if(!f?.geometry?.coordinates) throw new Error('坐标解析失败');
+  const [lon,lat]=f.geometry.coordinates; const {regionName,cityName}=parseRegionCity(f); const out={lon,lat,regionName,cityName}; geocodeCache.set(key,out); return out;
+}
+
+/* ==== 目的地 geocode ==== */
+async function geocodeDest(list,stateRaw,proxLon,proxLat){
+  const prox=`${proxLon},${proxLat}`;
+  const tasks=list.map(d=>async()=>{const q=d.type==='city'?`${d.name}, ${stateRaw}`:`${d.name}, ${d.city}, ${stateRaw}`; const types=d.type==='city'?GEOCODE_TYPES_CITY:GEOCODE_TYPES_AREA;
+    try{const {lon,lat}=await geocodeForward(q,{types,proximity:prox}); return {...d,lon,lat,ok:true};}catch{return {...d,ok:false};}});
+  const res=[]; let i=0,a=0,f=0;
+  return new Promise(resolve=>{
+    function next(){
+      while(a<MAX_CONCURRENT && i<tasks.length){
+        const idx=i++; a++;
+        tasks[idx]().then(v=>{res[idx]=v; a--; f++; if(f===tasks.length) resolve(res); else next();})
+                    .catch(()=>{res[idx]=list[idx]; a--; f++; next();});
+      }
+      if(i>=tasks.length && a===0) resolve(res);
+    }
+    next();
+  }).then(arr=>arr.filter(x=>x?.ok));
+}
+
+/* ==== Matrix：返回 meters & seconds（排序用原始米；展示用英里/分钟） ==== */
+async function matrixFrom(origin,dests){
+  const chunks=chunk(dests,24), all=[];
+  for(const batch of chunks){
+    const coords=[[origin.lon,origin.lat],...batch.map(d=>[d.lon,d.lat])].map(([x,y])=>`${x},${y}`).join(';');
+    const destIdx=batch.map((_,i)=>i+1).join(';');
+    const url=`https://api.mapbox.com/directions-matrix/v1/mapbox/driving/${coords}?annotations=distance,duration&sources=0&destinations=${destIdx}&access_token=${MAPBOX_TOKEN}`;
+    const resp=await withTimeout(fetch(url),REQUEST_TIMEOUT);
+    if(!resp.ok){ all.push(...batch.map(d=>({...d,distanceVal:Infinity,distance:'—',duration:'—'}))); continue; }
+    const data=await resp.json(); const distances=data?.distances?.[0]||[], durations=data?.durations?.[0]||[];
+    batch.forEach((d,i)=>{ const dist=distances[i], dur=durations[i];
+      if(Number.isFinite(dist)&&Number.isFinite(dur)) all.push({...d,distanceVal:dist,distance:fmtDist(dist),duration:fmtDur(dur)});
+      else all.push({...d,distanceVal:Infinity,distance:'—',duration:'—'});
+    });
+  }
+  return all;
+}
+
+/* ==== 并发池（用于进度条） ==== */
+function pool(tasks,limit,onprog){
+  let i=0,a=0,f=0,out=[];
+  return new Promise(resolve=>{
+    function next(){
+      while(a<limit && i<tasks.length){
+        const idx=i++; a++;
+        tasks[idx]().then(r=>{out[idx]=r; a--; f++; onprog?.(f,tasks.length); if(f===tasks.length) resolve(out.flat()); else next();})
+                    .catch(()=>{out[idx]=[]; a--; f++; onprog?.(f,tasks.length); next();});
+      }
+    }
+    next();
+  });
+}
+
+/* ==== 主流程 ==== */
+btn.onclick=async function(){
+  errEl.textContent=''; resultsEl.innerHTML=''; infoEl.style.display='none';
+  loadingEl.style.display='inline-block'; progressC.style.display='none'; progressBar.style.width='0%'; progressTxt.textContent='';
+  try{
+    const input=document.getElementById('addressInput').value.trim(); if(!input) throw new Error('请输入地址');
+
+    // 1) 地址解析
+    const {lon:ol,lat:oa,regionName:stateRaw,cityName:cityRaw}=await geocodeForward(input,{types:'address,place,locality'});
+    const origin={lon:ol,lat:oa};
+
+    // 2) 读取州/城市/区域
+    const resp=await fetch('bedpage.json'); if(!resp.ok) throw new Error('加载 bedpage.json 失败');
+    const all=await resp.json(); const stateKey=findStateKey(all,stateRaw); if(!stateKey) throw new Error(`未找到州：${stateRaw}`);
+    const cityMap=all[stateKey]; const allCities=Object.keys(cityMap||{}); if(!allCities.length) throw new Error(`州 ${stateKey} 未定义城市`);
+
+    // 3) 选择城市：命中则用；否则找同州最近支持城市
+    let chosenCity=findCityKey(allCities,cityRaw), chosenCityGeo=null, fallback=false;
+    if(!chosenCity){
+      progressC.style.display='block'; progressTxt.textContent='阶段1：寻找最近支持城市…';
+      const cityGeo=await geocodeDest(allCities.map(n=>({name:n,type:'city'})), stateRaw, origin.lon, origin.lat);
+      const chunks=chunk(cityGeo, MAX_BATCH_SIZE-1); const tasks=chunks.map(c=>()=>matrixFrom(origin,c));
+      const cityRes=await pool(tasks, Math.min(MAX_CONCURRENT, chunks.length), (f,t)=>{const p=Math.round(f/t*100); progressBar.style.width=p+'%'; progressTxt.textContent=`阶段1：寻找最近支持城市… ${p}%`;});
+      const valid=cityRes.filter(x=>x.distanceVal!==Infinity).sort((a,b)=>a.distanceVal-b.distanceVal);
+      if(!valid.length) throw new Error('未能在同州找到可用支持城市');
+      chosenCity=valid[0].name; chosenCityGeo = cityGeo.find(g=>g.name===chosenCity); fallback=true;
+    }else{
+      const [g]=await geocodeDest([{name:chosenCity,type:'city'}], stateRaw, origin.lon, origin.lat); chosenCityGeo=g;
+    }
+
+    // 4) 计算该城市的所有区域
+    const areas=cityMap[chosenCity]||[]; if(!areas.length) throw new Error(`城市 ${chosenCity} 未定义区域`);
+    progressBar.style.width='0%'; progressTxt.textContent=`阶段2：计算 "${chosenCity}" 的 ${areas.length} 个区域…`; progressC.style.display='block';
+
+    const areaGeo=await geocodeDest(areas.map(a=>({name:a,city:chosenCity,type:'area'})), stateRaw, chosenCityGeo?.lon??origin.lon, chosenCityGeo?.lat??origin.lat);
+    const areaChunks=chunk(areaGeo, MAX_BATCH_SIZE-1); const areaTasks=areaChunks.map(c=>()=>matrixFrom(origin,c));
+    const areaRes=await pool(areaTasks, Math.min(MAX_CONCURRENT, areaChunks.length), (f,t)=>{const p=Math.round(f/t*100); progressBar.style.width=p+'%'; progressTxt.textContent=`阶段2：批量计算区域距离… ${p}%`;});
+
+    // 5) 排序并渲染（距离近→远；英里/分钟）
+    areaRes.sort((a,b)=>a.distanceVal-b.distanceVal);
+    infoEl.style.display='block';
+    infoEl.innerHTML = fallback
+      ? `🎯 输入城市 <strong>${cityRaw}</strong> 不在支持列表，已改用同州最近支持城市：<strong>${chosenCity}</strong>。`
+      : `✅ 已匹配到城市：<strong>${chosenCity}</strong>（仅显示该城市支持区域）。`;
+
+    let rows='';
+    for(const r of areaRes){
+      const o=`${origin.lat},${origin.lon}`, d=`${r.lat},${r.lon}`;
+      const nav=`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}`;
+      rows+=`<tr><td>${r.name}</td><td>${chosenCity}</td><td>${r.distance}</td><td>${r.duration}</td><td><a class="nav-link" href="${nav}" target="_blank" rel="noopener">🧭 导航</a></td></tr>`;
+    }
+    resultsEl.innerHTML=`<table>
+      <thead><tr><th>📍 区域</th><th>🏙️ 城市</th><th>📏 距离（英里）</th><th>⏱️ 时间（分钟）</th><th>🚗</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+    progressTxt.textContent='✅ 完成';
+  }catch(e){ errEl.textContent=e.message||'发生错误'; }
+  finally{ loadingEl.style.display='none'; setTimeout(()=>{progressC.style.display='none';progressTxt.textContent='';},1500); }
+};
+document.getElementById('addressInput').addEventListener('keypress',e=>{if(e.key==='Enter')btn.click();});
+</script>
+</body>
+</html>
